@@ -1,7 +1,7 @@
 ---
 title: "Journal (reproducible report)"
 author: "Qianyun Wang"
-date: "2020-11-05"
+date: "2020-11-24"
 output:
   html_document:
     toc: true
@@ -11,29 +11,248 @@ output:
     toc_depth: 3
     #code_folding: hide
 ---
-
+***
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 ```
 
-**IMPORTANT:** You can delete everything in here and start fresh. You might want to start by not deleting anything above this line until you know what that stuff is doing.
+**NOTE:** This file displays both course results and challenge result.
 
-This is an `.Rmd` file. It is plain text with special features. Any time you write just like this, it will be compiled to normal text in the website. If you put a \# in front of your text, it will create a top level-header.
-
-# My first post
+***
+# Intro to the tidyverse - result
 
 Last compiled: `r Sys.Date()`
 
-Notice that whatever you define as a top level header, automatically gets put into the table of contents bar on the left. 
+course result and challenge result
 
-## Second level header
+## Course Result
 
-You can add more headers by adding more hashtags. These won't be put into the table of contents
+> **Sales by Year and Category Analyse**
 
-### third level header
+***
 
-Here's an even lower level header
+```{r plot, fig.width=7, fig.height=4,echo = FALSE}
+# 1.0 Load libraries ----
+library(tidyverse)
+library(readxl)
 
+# 2.0 Importing Files ----
+bikes_tbl <- read_excel(path="~/Desktop/TUHH/Bussiness Data Science Basic/DS_101/00_data/01_bike_sales/01_raw_data/bikes.xlsx") 
+order_tbl <- read_excel(path = "~/Desktop/TUHH/Bussiness Data Science Basic/DS_101/00_data/01_bike_sales/01_raw_data/orderlines.xlsx")
+bikeshop_tbl <-read_excel(path = "~/Desktop/TUHH/Bussiness Data Science Basic/DS_101/00_data/01_bike_sales/01_raw_data/bikeshops.xlsx")
+
+# 4.0 Joining Data ----
+bike_orderlines_joined_tbl <- order_tbl %>%
+  left_join(bikes_tbl,by=c('product.id'='bike.id')) %>%
+  left_join(bikeshop_tbl,by=c('customer.id'='bikeshop.id'))
+
+# 5.0 Wrangling Data ----
+bike_orderlines_wrangled_tbl <- bike_orderlines_joined_tbl %>%
+  separate(col= category,
+           into = c('category.1','category.2','category.3'),
+           sep = '-') %>%
+  mutate(total.price = price * quantity) %>%
+  
+  select(-...1, -gender) %>%
+  select(-ends_with('.id'))%>%
+  bind_cols(bike_orderlines_joined_tbl %>% select(order.id))%>%
+  
+  select(order.id, contains('order'),contains('model'),contains('category'),
+         price, quantity, total.price,
+         everything()) %>%
+ 
+  rename(bikeshop = name) %>%
+  set_names(names(.) %>% str_replace_all('\\.','_'))
+
+# 6.0 Business Insights ----
+# 6.1 Sales by Year ----
+
+# Step 1 - Manipulate
+library(lubridate)
+sales_by_year_tbl <- bike_orderlines_wrangled_tbl %>%
+  select(order_date, total_price) %>%
+  mutate(year=year(order_date))%>%
+  group_by(year) %>%
+  summarise(sales=sum(total_price))%>%
+  
+  mutate(sales_text = scales::dollar(sales, big.mark = '.',
+                                    decimal.mark =',',
+                                    prefix = '',
+                                    suffix =" €"
+                                    ))
+
+# Step 2 - Visualize
+sales_by_year_tbl %>%
+  ggplot(aes(x = year, y= sales)) +
+  
+  geom_col(fill="#2DC6D6") +
+  geom_label(aes(label=sales_text))+
+  geom_smooth(method = 'lm',se=FALSE) +
+  
+  scale_y_continuous(labels = scales::dollar_format(big.mark ='.',
+                                                    decimal.mark =',',
+                                                    prefix = '',
+                                                    suffix =" €" ))+
+  labs(
+    title = 'Revenue by year',
+    subtitle = "Upward Trend",
+    x="",
+    y="Revenue"
+  )
+
+# 6.2 Sales by Year and Category 2 ----
+# Step 1 - Manipulate
+
+sales_by_year_cat_1_tbl <- bike_orderlines_wrangled_tbl %>%
+  select(order_date, total_price, category_1) %>%
+  mutate(year=year(order_date))%>%
+  group_by(year, category_1) %>%
+  summarise(sales = sum(total_price))%>%
+  ungroup() %>%
+  
+  mutate(sales_text = scales::dollar(sales, big.mark = '.',
+                                     decimal.mark =',',
+                                     prefix = '',
+                                     suffix =" €"
+  ))
+
+# Step 2 - Visualize
+sales_by_year_cat_1_tbl %>%
+  ggplot(aes(x=year,y=sales, fill=category_1))+
+  
+  geom_col()+
+  geom_smooth(method = 'lm',se=FALSE) +
+  
+facet_wrap(~category_1)+
+
+  scale_y_continuous(labels = scales::dollar_format(big.mark ='.',
+                                                    decimal.mark =',',
+                                                    prefix = '',
+                                                    suffix =" €" ))+
+  labs(
+    title = 'Revenue by year and main category',
+    subtitle = "Each product category has an upward Trend",
+    fill="Main category"
+  )
+
+```
+
+***
+## Challenge Result
+
+> **Sales by Location and Year Analyse**
+
+> 1.Analyze the sales by location (state) with a bar plot. Since state and city are multiple features (variables), they should be split. Which state has the highes revenue?
+
+* **Answer**: North Rhine-Westphalia
+
+> 2.Analyze the sales by location and year (facet_wrap). Because there are 12 states with bike stores, you should get 12 plots.
+
+* **Answer**: Both plots below.
+
+***
+```{r plot2, fig.width=10, fig.height=7,echo = FALSE}
+# 1.0 Load libraries ----
+library(tidyverse)
+library(readxl)
+
+# 2.0 Importing Files ----
+bikes_tbl <- read_excel(path="~/Desktop/TUHH/Bussiness Data Science Basic/DS_101/00_data/01_bike_sales/01_raw_data/bikes.xlsx") 
+order_tbl <- read_excel(path = "~/Desktop/TUHH/Bussiness Data Science Basic/DS_101/00_data/01_bike_sales/01_raw_data/orderlines.xlsx")
+bikeshop_tbl <-read_excel(path = "~/Desktop/TUHH/Bussiness Data Science Basic/DS_101/00_data/01_bike_sales/01_raw_data/bikeshops.xlsx")
+
+# 4.0 Joining Data ----
+bike_orderlines_joined_tbl <- order_tbl %>%
+  left_join(bikes_tbl,by=c('product.id'='bike.id')) %>%
+  left_join(bikeshop_tbl,by=c('customer.id'='bikeshop.id'))
+
+# Wrangling data ----
+bike_orderlines_wrangled_2_tbl <- bike_orderlines_joined_tbl %>%
+  separate(col= location,
+           into = c('city','state'),
+           sep = ',') %>%
+  mutate(total.price = price * quantity) %>%
+  
+  select(-...1, -gender,-category) %>%
+  select(-ends_with('.id'))%>%
+  bind_cols(bike_orderlines_joined_tbl %>% select(order.id))%>%
+  
+  select(order.id, contains('order'),contains('state'),contains('city'),
+         price, quantity, total.price,
+         everything())
+
+# Sales by Location ----
+
+# Step 1 - Manipulate
+sales_by_loc_tbl <- bike_orderlines_wrangled_2_tbl %>%
+  select(state, total.price) %>%
+  group_by(state) %>%
+  summarise(sales=sum(total.price))%>%
+  
+  mutate(sales_text = scales::dollar(sales, big.mark = '.',
+                                     decimal.mark =',',
+                                     prefix = '',
+                                     suffix =" €"
+  ))
+
+# Step 2 - Visualize
+sales_by_loc_tbl %>%
+  ggplot(aes(x = state, y= sales)) +
+  
+  geom_col(fill="#2DC6D6") +
+  geom_label(aes(label=sales_text))+
+  
+  scale_y_continuous(labels = scales::dollar_format(big.mark ='.',
+                                                    decimal.mark =',',
+                                                    prefix = '',
+                                                    suffix =" €" ))+
+  
+  labs(
+    title = 'Sales by state',
+    subtitle = "Top state: North Rhine-Westphalia",
+    x="",
+    y="Revenue"
+  )+ 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Sales by Year and Location ----
+# Step 1 - Manipulate
+
+sales_by_year_loc_tbl <- bike_orderlines_wrangled_2_tbl %>%
+  select(order.date, total.price, state) %>%
+  mutate(year=year(order.date))%>%
+  group_by(year, state) %>%
+  summarise(sales = sum(total.price))%>%
+  ungroup() %>%
+  
+  mutate(sales_text = scales::dollar(sales, big.mark = '.',
+                                     decimal.mark =',',
+                                     prefix = '',
+                                     suffix =" €"
+  ))
+
+# Step 2 - Visualize
+sales_by_year_loc_tbl %>%
+  ggplot(aes(x=year,y=sales, fill=state))+
+  
+  geom_col()+
+  geom_smooth(method = 'lm',se=FALSE) +
+  
+  facet_wrap(~state)+
+  
+  scale_y_continuous(labels = scales::dollar_format(big.mark ='.',
+                                                    decimal.mark =',',
+                                                    prefix = '',
+                                                    suffix =" €" ))+
+  labs(
+    title = 'Revenue by year and state',
+    subtitle = "Most state has an upward Trend",
+    fill="State"
+  )
+
+```
+
+***
 # My second post (note the order)
 
 Last compiled: `r Sys.Date()`
