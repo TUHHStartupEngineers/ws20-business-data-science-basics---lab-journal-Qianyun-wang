@@ -9,7 +9,7 @@ output:
     collapsed: false
     number_sections: true
     toc_depth: 3
-    #code_folding: hide
+    code_folding: hide
 ---
 ***
 ```{r setup, include=FALSE}
@@ -19,7 +19,7 @@ knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 **NOTE:** This file displays both course results and challenge result.
 
 ***
-# Intro to the tidyverse - result
+# Intro to the tidyverse
 
 Last compiled: `r Sys.Date()`
 
@@ -253,11 +253,35 @@ sales_by_year_loc_tbl %>%
 ```
 
 ***
-# My second post (note the order)
+# Data Acquisition
 
 Last compiled: `r Sys.Date()`
 
-I'm writing this tutorial going from the top down. And, this is how it will be printed. So, notice the second post is second in the list. If you want your most recent post to be at the top, then make a new post starting at the top. If you want the oldest first, do, then keep adding to the bottom
+## Get Data via API 
+> I get the daily visit data as pv of the wikipedia page: Coronavirus_disease_2019 (https://en.wikipedia.org/w/index.php?title=Coronavirus_disease_2019&redirect=no), the time period is set to recent 10 days and can be changed in the R code freely.  The result of json format and list format is shown below.
+
+```{r echo=TRUE}
+library(tidyverse)
+library(httr)
+library(jsonlite)
+
+starting <- "20201114"
+ending <- "20201124"
+article_title <- 'Coronavirus_disease_2019'
+
+url <- paste("https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/all-agents",
+             article_title,
+             "daily",
+             starting,
+             ending,
+             sep = "/")
+
+resp <-GET(url)
+
+toJSON(fromJSON(content(resp, as="text")), pretty = TRUE)
+result <- fromJSON(content(resp, as="text"))
+result
+```
 
 # Adding R stuff
 
