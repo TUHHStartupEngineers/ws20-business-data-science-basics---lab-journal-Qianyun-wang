@@ -283,15 +283,64 @@ result <- fromJSON(content(resp, as="text"))
 result
 ```
 
-# Adding R stuff
+***
 
-So far this is just a blog where you can write in plain text and serve your writing to a webpage. One of the main purposes of this lab journal is to record your progress learning R. The reason I am asking you to use this process is because you can both make a website, and a lab journal, and learn R all in R-studio. This makes everything really convenient and in the same place. 
+## Bike Data of Rosebike 
 
-So, let's say you are learning how to make a histogram in R. For example, maybe you want to sample 100 numbers from a normal distribution with mean = 0, and standard deviation = 1, and then you want to plot a histogram. You can do this right here by using an r code block, like this:
+> I get create a small database of MTA bike data from website rosebike, the database inclues the name and price information for all the bikes with the category MTA of this website. There are in total 22 bike information and this page only shows the first 10 rows.
 
 ```{r}
-samples <- rnorm(100, mean=0, sd=1)
-hist(samples)
+library(tidyverse) 
+library(rvest)   
+library(jsonlite) 
+library(glue)   
+library(stringi) 
+
+url_mtb <- "https://www.rosebikes.de/fahrr%C3%A4der/mtb"
+html_mtb <- read_html(url_mtb)
+
+mtb_bike_category_tbl <- html_mtb  %>%
+  
+  html_nodes(css='.catalog-category-bikes__button')%>%
+  html_attr('href')%>%
+  enframe(name = 'position', value = 'subdirectory') %>%
+  mutate(url=glue('https://www.rosebikes.de{subdirectory}'))%>%
+  distinct(url)
+
+get_mtb_bike_data <- function(url_mtb){
+  
+  mtb_html_bike_category <- read_html(url_mtb)
+  
+  mtb_bike_name_tbl<- mtb_html_bike_category %>%
+    html_nodes(css= '.catalog-category-model__title')%>%
+    html_text() %>%
+    stringr::str_replace_all(pattern = "\\\n", replacement = "")%>%
+    enframe(name = 'position', value = 'name')
+    
+  mtb_bike_price_tbl <- mtb_html_bike_category %>%
+    html_nodes(css= '.catalog-category-model__price-current-value')%>%
+    html_text() %>%
+    stringr::str_replace_all(pattern = "\\\n", replacement = "")%>%
+    enframe(name = 'position', value = 'price')%>%
+    left_join(mtb_bike_name_tbl)
+  
+}
+
+mtb_bike_category_url_vec <- mtb_bike_category_tbl %>% 
+  pull(url)
+
+mtb_bike_data_lst <- map(mtb_bike_category_url_vec, get_mtb_bike_data)
+
+mtb_bike_data_tbl <- bind_rows(mtb_bike_data_lst) 
+mtb_bike_data_tbl <- add_column(mtb_bike_data_tbl, category='MTB')
+mtb_bike_data_tbl <- mtb_bike_data_tbl[c( 'category','name','price')]
+head(mtb_bike_data_tbl,10)
+
+saveRDS(mtb_bike_data_tbl, "mtb_bike_data_tbl.rds")
+
 ```
+
+***
+
 
 When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block.
