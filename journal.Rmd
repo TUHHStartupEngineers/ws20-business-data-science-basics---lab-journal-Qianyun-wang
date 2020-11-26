@@ -11,12 +11,14 @@ output:
     toc_depth: 3
     code_folding: hide
 ---
-***
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
+library(knitr)
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	cache = TRUE
+)
 ```
-
-**NOTE:** This file displays both course results and challenge result.
 
 ***
 # Intro to the tidyverse
@@ -258,12 +260,14 @@ sales_by_year_loc_tbl %>%
 Last compiled: `r Sys.Date()`
 
 ## Get Data via API 
-> I get the daily visit data as pv of the wikipedia page: Coronavirus_disease_2019 (https://en.wikipedia.org/w/index.php?title=Coronavirus_disease_2019&redirect=no), the time period is set to recent 10 days and can be changed in the R code freely.  The result of json format and list format is shown below.
+> I get the daily visit data as pv of the wikipedia page: Coronavirus_disease_2019 (https://en.wikipedia.org/w/index.php?title=Coronavirus_disease_2019&redirect=no), the time period is set to recent 10 days and can be changed in the R code freely.  The result of json format and tibble format is shown below.
 
 ```{r echo=TRUE}
 library(tidyverse)
 library(httr)
 library(jsonlite)
+library(lubridate)
+library(stringr)
 
 starting <- "20201114"
 ending <- "20201124"
@@ -280,7 +284,17 @@ resp <-GET(url)
 
 toJSON(fromJSON(content(resp, as="text")), pretty = TRUE)
 result <- fromJSON(content(resp, as="text"))
-result
+result_tbl<-map(result, ~data.frame(.))%>%
+  map_dfr(.,~mutate_all(.,as.character()))%>%
+  as_tibble()%>%
+  transmute(Website = project,
+         Aritcle_title = article,
+         Visit_type = granularity,
+         Date =ymd(str_sub(timestamp, 1, -3)),
+         Views=views)
+result_tbl
+
+
 ```
 
 ***
@@ -331,10 +345,11 @@ mtb_bike_category_url_vec <- mtb_bike_category_tbl %>%
 
 mtb_bike_data_lst <- map(mtb_bike_category_url_vec, get_mtb_bike_data)
 
+
 mtb_bike_data_tbl <- bind_rows(mtb_bike_data_lst) 
 mtb_bike_data_tbl <- add_column(mtb_bike_data_tbl, category='MTB')
 mtb_bike_data_tbl <- mtb_bike_data_tbl[c( 'category','name','price')]
-head(mtb_bike_data_tbl,10)
+mtb_bike_data_tbl
 
 saveRDS(mtb_bike_data_tbl, "mtb_bike_data_tbl.rds")
 
@@ -342,5 +357,188 @@ saveRDS(mtb_bike_data_tbl, "mtb_bike_data_tbl.rds")
 
 ***
 
+# Data Wrangling
 
-When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block.
+
+```{r calculation, eval= FALSE}
+library(tidyverse)
+library(vroom)
+library(data.table)
+library(tictoc)
+
+col_patent <- list(
+  patent_id = col_character(),
+  patent_type = col_character(),
+  number = col_character(),
+  country = col_character(),
+  date = col_date("%Y-%m-%d"),
+  abstract = col_character(),
+  title = col_character(),
+  kind = col_character(),
+  num_claims = col_double(),
+  filename = col_character(),
+  withdrawn = col_double()
+)
+
+patent_tbl <- vroom(
+  file       = "patent.tsv", 
+  delim      = "\t", 
+  col_names  = names(col_patent),
+  col_types  = col_patent,
+  na         = c("", "NA", "NULL")
+)
+
+
+col_assignee <- list(
+  assignee_id = col_character(),
+  assignee_type = col_double(),
+  name_first = col_character(),
+  name_last = col_character(),
+  organization = col_character()
+)
+
+assignee_tbl <- vroom(
+  file       = "assignee.tsv", 
+  delim      = "\t", 
+  col_names  = names(col_assignee),
+  col_types  = col_assignee,
+  na         = c("", "NA", "NULL")
+)
+
+col_patent_assignee <- list(
+  patent_id = col_character(),
+  assignee_id = col_character(),
+  location_id = col_character()
+)
+
+patent_assignee_tbl <- vroom(
+  file       = "patent_assignee.tsv", 
+  delim      = "\t", 
+  col_names  = names(col_patent_assignee),
+  col_types  = col_patent_assignee,
+  na         = c("", "NA", "NULL")
+)
+
+col_uspc <- list(
+  uuid = col_character(),
+  patent_id = col_character(),
+  mainclass_id = col_character(),
+  subclass_id = col_character(),
+  sequence= col_double()
+)
+
+uspc_tbl <- vroom(
+  file       = "USPC.tsv", 
+  delim      = "\t", 
+  col_names  = names(col_uspc),
+  col_types  = col_uspc,
+  na         = c("", "NA", "NULL")
+)
+
+
+combined_p_a_data <- assignee_tbl %>%
+  select(assignee_id, assignee_type, organization) %>%
+  filter(assignee_type ==2) %>%
+  right_join(patent_assignee_tbl,by='assignee_id') %>%
+  select(patent_id, assignee_id, assignee_type, organization)
+  
+patent_dominance <-combined_p_a_data %>%
+  filter(assignee_type ==2) %>%
+  group_by(organization)%>%
+  summarise(patent_num=n())%>%
+  ungroup()%>%
+  arrange(desc(patent_num))
+
+write_rds(patent_dominance,'patent_dominace.rds')
+
+
+combined_p_a_p_data <- patent_tbl %>%
+  select(patent_id, date) %>%
+  left_join(combined_p_a_data,by='patent_id') %>%
+  select(patent_id, date,assignee_id, assignee_type, organization)
+
+recent_patent_activity <-combined_p_a_p_data %>%
+  filter(assignee_type ==2) %>%
+  filter(year(date)== 2019)%>%
+  group_by(organization)%>%
+  summarise(patent_num_2019=n())%>%
+  ungroup()%>%
+  arrange(desc(patent_num_2019))
+
+write_rds(recent_patent_activity,'recent_patent_activity.rds')
+
+patent_dominance_worldwide <-combined_p_a_data %>%
+  filter(assignee_type ==2 | assignee_type ==3) %>%
+  group_by(organization)%>%
+  summarise(patent_num=n())%>%
+  ungroup()%>%
+  arrange(desc(patent_num))
+
+combined_p_a_u_data <- uspc_tbl%>%
+  select(patent_id, mainclass_id)%>%
+  left_join(combined_p_a_data,by= "patent_id")%>%
+  select(patent_id,assignee_id,assignee_type,organization,mainclass_id)
+
+innovation_in_tech <-combined_p_a_u_data %>%
+  filter(assignee_id %in% c('org_ONzMjdbZXiKfw4L0cXl6',  
+                            'org_pCbqlmAg8wlWzoi18ITD',
+                            'org_eAKK85fawH0NS7AdXOig',
+                            'org_g8U335TH48QmGJOIQnNl',
+                            'org_EccJQIigrq4WyGinD0b8',
+                            'org_rWEJSmVQtQg24yFJqVRb',
+                            'org_yOSqt2KbCZQB2LRNpEKS',
+                            'org_OrmhECOcsM3rq5b7Pxfe',
+                            'org_f0ZEyISdLqKONLOyVOev',
+                            'org_sCPx37zDCUvOnx2ptLAe'))%>%
+  group_by(mainclass_id)%>%
+  summarise(patent_num_mainclass=n())%>%
+  ungroup()%>%
+  arrange(desc(patent_num_mainclass))
+
+write_rds(innovation_in_tech,'innovation_in_tech.rds')
+
+```
+
+> 1.What US company has the most patents? List the 10 US companies with the most aaigned/granted patents.
+
+* **Answer**: International Business Machines Corporation (with 139091 patents in total). (Top 10 list below)
+
+```{r patent_dominance}
+library(reader)
+library(data.table)
+
+patent_dominance<-read_rds("patent_dominace.rds")
+head(patent_dominance,10)
+```
+
+
+***
+
+> 2.Patent Dominance: Recent patent acitivity: What US company had the most patents granted in 2019? List the top 10 companies with the most new granted patents for 2019.
+
+* **Answer**: International Business Machines Corporation (with 9265 patents in 2019). (Top 10 list below)
+
+```{r recent_patent_activity}
+library(reader)
+library(data.table)
+
+recent_patent_activity<-read_rds("recent_patent_activity.rds")
+head(recent_patent_activity,10)
+```
+
+
+***
+> 3.Innovation in Tech: What is the most innovative tech sector? For the top 10 companies with the most patents, what are the top 5 USPTO tech main classes?
+
+* **Answer**: Top 5 USPTO tech main classes for the top 10 companies with the most patents are "257", "438", "365", "370" and "358". (Top 10 list below)
+
+```{r innovation_in_tech}
+library(reader)
+library(data.table)
+
+innovation_in_tech<-read_rds("innovation_in_tech.rds")
+head(innovation_in_tech,10)
+```
+
+***
+
