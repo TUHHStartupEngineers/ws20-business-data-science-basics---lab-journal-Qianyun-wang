@@ -345,10 +345,14 @@ mtb_bike_data_lst <- map(mtb_bike_category_url_vec, get_mtb_bike_data)
 
 
 mtb_bike_data_tbl <- bind_rows(mtb_bike_data_lst) 
-mtb_bike_data_tbl <- add_column(mtb_bike_data_tbl, category='MTB')
-mtb_bike_data_tbl <- mtb_bike_data_tbl[c( 'category','name','price')]
+mtb_bike_data_tbl <- add_column(mtb_bike_data_tbl, bike_category='MTB')
+mtb_bike_data_tbl <- mtb_bike_data_tbl %>% 
+  select(bike_category, name,price) %>% 
+  mutate(price_num = str_replace(price,pattern = "€", replacement = "")%>%
+           str_replace(pattern = "\\.", replacement = "")%>%
+           str_replace(pattern = "\\,", replacement = ".")%>%
+           as.numeric())
 mtb_bike_data_tbl
-
 saveRDS(mtb_bike_data_tbl, "mtb_bike_data_tbl.rds")
 
 ```
