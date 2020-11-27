@@ -562,6 +562,7 @@ library(tidyverse)
 library(dplyr)
 library(lubridate)
 library(scales)
+library(ggrepel)
 
 
 covid_data_tbl <- read_csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv")
@@ -576,6 +577,14 @@ cum_covid_data_tbl <- covid_data_tbl %>%
   group_by(Country)%>%
   mutate(cum_case = cumsum(cases))
 
+df<- cum_covid_data_tbl%>%
+  filter(date=="2020-11-27") %>%
+  filter(Country%in% c("United_States_of_America","France"))%>%
+  mutate(cum_case_text=scales::dollar(cum_case, big.mark = '.',
+                                     decimal.mark =',',
+                                     prefix = '',
+                                     suffix =" "))
+
 cum_covid_data_tbl %>%
   ggplot(aes(x=date ,y=cum_case,color=Country))+
   geom_line() +
@@ -587,6 +596,11 @@ cum_covid_data_tbl %>%
                                                     decimal.mark = ",", 
                                                     prefix = "",
                                                     suffix = "M")) +
+  geom_label_repel(data = df,
+             aes(y=cum_case,label=cum_case_text,fill=Country),
+             colour="white",fontface="bold",show.legend=FALSE,
+             hjust = 2
+             )+
   labs(
     title = 'CVOID-19 confirmed cases worldwide',
     subtitle = "USA grows much faster after April.",
@@ -596,6 +610,7 @@ cum_covid_data_tbl %>%
   theme_light()+
   theme(legend.position = "bottom",
         panel.grid=element_line(color = "white"),
+        panel.grid.minor.x  = element_blank(),
         panel.background=element_rect(fill="black"),
         panel.border = element_blank(),
         axis.text.x = element_text(angle = 45, hjust = 1))
